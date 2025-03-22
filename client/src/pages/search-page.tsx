@@ -48,7 +48,7 @@ export default function SearchPage() {
       params.set("list", activeList);
     }
     
-    if (selectedGenre) {
+    if (selectedGenre && selectedGenre !== "all") {
       params.set("genre", selectedGenre);
     }
     
@@ -199,10 +199,10 @@ export default function SearchPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {isGenresLoading ? (
-                    <SelectItem value="" disabled>Loading...</SelectItem>
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
                   ) : (
                     <>
-                      <SelectItem value="">All Genres</SelectItem>
+                      <SelectItem value="all">All Genres</SelectItem>
                       {genres?.map((genre: any) => (
                         <SelectItem key={genre.id} value={genre.id.toString()}>
                           {genre.name}
