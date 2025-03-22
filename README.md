@@ -11,6 +11,23 @@ A modern movie review and discovery platform built with React, TypeScript, and E
 - **Responsive Design**: Fully responsive UI that works on desktop and mobile devices
 - **Modern UI**: Built with Tailwind CSS and Shadcn UI components
 
+## Screenshots 📸
+
+### Home Page
+![Home Page](screenshots/home.png)
+
+### Movie Details
+![Movie Details](screenshots/movie-details.png)
+
+### Search Results
+![Search Results](screenshots/search.png)
+
+### Genre Selection
+![Genre Selection](screenshots/genres.png)
+
+### Mobile View
+![Mobile View](screenshots/mobile.png)
+
 ## Tech Stack 💻
 
 - **Frontend**:
