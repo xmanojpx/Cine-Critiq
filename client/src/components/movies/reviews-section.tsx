@@ -36,48 +36,52 @@ export default function ReviewsSection({ title, reviews, isLoading, viewAllLink 
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {isLoading
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-muted/30 rounded-lg p-5 flex">
-                <Skeleton className="w-16 h-24 rounded-md mr-4" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-muted/30 rounded-lg p-6">
+              <div className="flex gap-4 mb-4">
+                <Skeleton className="w-16 h-24 rounded" />
                 <div className="flex-grow space-y-2">
                   <div className="flex justify-between">
-                    <Skeleton className="h-5 w-1/3" />
-                    <Skeleton className="h-5 w-10" />
+                    <Skeleton className="h-6 w-1/3" />
+                    <Skeleton className="h-6 w-12" />
                   </div>
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-3/4" />
-                  <div className="flex items-center pt-2">
-                    <Skeleton className="h-5 w-5 rounded-full mr-2" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
                 </div>
               </div>
-            ))
-          : reviews?.map((review) => (
-              <ReviewCard
-                key={review.id}
-                id={review.id}
-                movieId={review.movieId}
-                movieTitle={review.movieTitle}
-                moviePosterPath={review.moviePosterPath}
-                rating={review.rating}
-                content={review.content}
-                authorId={review.userId}
-                authorName={review.authorName}
-                authorAvatar={review.authorAvatar}
-                createdAt={review.createdAt}
-              />
-            ))}
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-6 w-6 rounded-full" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            </div>
+          ))
+        ) : reviews && reviews.length > 0 ? (
+          reviews.map(review => (
+            <ReviewCard
+              key={review.id}
+              id={review.id}
+              movieId={review.movieId}
+              movieTitle={review.movieTitle}
+              moviePosterPath={review.moviePosterPath}
+              rating={review.rating}
+              content={review.content}
+              authorId={review.userId}
+              authorName={review.authorName}
+              authorAvatar={review.authorAvatar}
+              createdAt={review.createdAt}
+            />
+          ))
+        ) : (
+          <div className="col-span-2 text-center py-10 bg-muted/30 rounded-lg">
+            <p className="text-muted-foreground">No reviews yet.</p>
+          </div>
+        )}
       </div>
-      
-      {reviews && reviews.length === 0 && !isLoading && (
-        <div className="text-center py-10">
-          <p className="text-muted-foreground">No reviews yet.</p>
-        </div>
-      )}
     </section>
   );
 }

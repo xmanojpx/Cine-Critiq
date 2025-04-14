@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, List, User } from "lucide-react";
+import { Home, Search, List, User, Sparkles } from "lucide-react";
 
 export default function MobileNavigation() {
   const [location] = useLocation();
@@ -22,9 +22,9 @@ export default function MobileNavigation() {
           <Search className="w-6 h-6" />
           <span className="text-xs mt-1">Search</span>
         </Link>
-        <Link href="/search?list=top_rated" className={`flex flex-col items-center justify-center py-3 px-4 ${isActive('/lists') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
-          <List className="w-6 h-6" />
-          <span className="text-xs mt-1">Lists</span>
+        <Link href="/recommendations" className={`flex flex-col items-center justify-center py-3 px-4 ${isActive('/recommendations') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
+          <Sparkles className="w-6 h-6" />
+          <span className="text-xs mt-1">For You</span>
         </Link>
         <Link href="/profile" className={`flex flex-col items-center justify-center py-3 px-4 ${isActive('/profile') ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}>
           <User className="w-6 h-6" />

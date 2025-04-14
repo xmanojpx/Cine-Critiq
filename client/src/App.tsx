@@ -11,6 +11,7 @@ import AuthPage from "@/pages/auth-page";
 import MoviePage from "@/pages/movie-page";
 import ProfilePage from "@/pages/profile-page";
 import SearchPage from "@/pages/search-page";
+import RecommendationsPage from "@/pages/recommendations-page";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/movie/:id" component={MoviePage} />
       <Route path="/search" component={SearchPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/recommendations" component={RecommendationsPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <Route component={NotFound} />
     </Switch>

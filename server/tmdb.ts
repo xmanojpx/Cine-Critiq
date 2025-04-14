@@ -1,8 +1,53 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+import axiosRetry from 'axios-retry';
+
+interface IAxiosRetryConfig {
+  retries?: number;
+  retryCondition?: (error: AxiosError) => boolean;
+  retryDelay?: (retryCount: number) => number;
+  shouldResetTimeout?: boolean;
+}
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "82f1a07f55b2e1eecfabbd3294a7b603";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
+
+// Create Axios instance with retry configuration
+const tmdbClient = axios.create({
+  baseURL: TMDB_BASE_URL,
+  params: {
+    api_key: TMDB_API_KEY,
+    language: 'en-US',
+    include_adult: false
+  },
+  timeout: 10000
+});
+
+// Configure retry behavior
+axiosRetry(tmdbClient, {
+  retries: 3,
+  retryDelay: (retryCount: number) => {
+    return retryCount * 1000; // Wait 1s, 2s, 3s between retries
+  },
+  retryCondition: (error: AxiosError) => {
+    // Retry on network errors or 5xx errors
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
+           (error.response?.status && error.response?.status >= 500);
+  }
+} as IAxiosRetryConfig);
+
+// Add response interceptor for error handling
+tmdbClient.interceptors.response.use(
+  response => response,
+  async (error: AxiosError) => {
+    console.error('TMDB API Error:', {
+      status: error.response?.status,
+      message: error.message,
+      url: error.config?.url
+    });
+    throw error;
+  }
+);
 
 export const POSTER_SIZES = {
   SMALL: "w154",
@@ -83,41 +128,113 @@ export const getImageUrl = (path: string | null, size = POSTER_SIZES.MEDIUM) => 
   return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
 };
 
-const tmdbClient = axios.create({
-  baseURL: TMDB_BASE_URL,
-  params: {
-    api_key: TMDB_API_KEY
+// Helper function to clean and validate credits data
+const cleanCreditsData = (credits: any): { cast: any[]; crew: any[] } => {
+  if (!credits || typeof credits !== 'object') {
+    return { cast: [], crew: [] };
   }
-});
+
+  return {
+    cast: Array.isArray(credits.cast) ? credits.cast.map((actor: any) => ({
+      id: actor.id || 0,
+      name: actor.name || 'Unknown',
+      character: actor.character || 'Unknown',
+      profile_path: actor.profile_path || null
+    })) : [],
+    crew: Array.isArray(credits.crew) ? credits.crew.map((member: any) => ({
+      id: member.id || 0,
+      name: member.name || 'Unknown',
+      job: member.job || 'Unknown',
+      department: member.department || 'Unknown',
+      profile_path: member.profile_path || null
+    })) : []
+  };
+};
+
+// Helper function to validate and clean movie data
+const cleanMovieData = (movie: any): Movie => {
+  if (!movie || typeof movie !== 'object') {
+    throw new Error('Invalid movie data received from TMDB API');
+  }
+
+  return {
+    id: movie.id || 0,
+    title: movie.title || 'Untitled',
+    poster_path: movie.poster_path || null,
+    backdrop_path: movie.backdrop_path || null,
+    overview: movie.overview || '',
+    release_date: movie.release_date || '',
+    vote_average: typeof movie.vote_average === 'number' ? movie.vote_average : 0,
+    vote_count: movie.vote_count || 0,
+    genre_ids: Array.isArray(movie.genre_ids) ? movie.genre_ids : [],
+    genres: Array.isArray(movie.genres) ? movie.genres : [],
+    runtime: typeof movie.runtime === 'number' ? movie.runtime : null,
+    status: movie.status || '',
+    tagline: movie.tagline || '',
+    revenue: typeof movie.revenue === 'number' ? movie.revenue : 0,
+    budget: typeof movie.budget === 'number' ? movie.budget : 0,
+    production_companies: Array.isArray(movie.production_companies) ? movie.production_companies : []
+  };
+};
 
 export const tmdbApi = {
   getTrendingMovies: async (): Promise<Movie[]> => {
-    const response = await tmdbClient.get("/trending/movie/week");
-    return response.data.results;
+    try {
+      const response = await tmdbClient.get("/trending/movie/week");
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error('Error fetching trending movies:', error);
+      throw error;
+    }
   },
 
   getPopularMovies: async (): Promise<Movie[]> => {
-    const response = await tmdbClient.get("/movie/popular");
-    return response.data.results;
+    try {
+      const response = await tmdbClient.get("/movie/popular");
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error('Error fetching popular movies:', error);
+      throw error;
+    }
   },
 
   getTopRatedMovies: async (): Promise<Movie[]> => {
-    const response = await tmdbClient.get("/movie/top_rated");
-    return response.data.results;
+    try {
+      const response = await tmdbClient.get("/movie/top_rated");
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error('Error fetching top rated movies:', error);
+      throw error;
+    }
   },
 
   getUpcomingMovies: async (): Promise<Movie[]> => {
-    const response = await tmdbClient.get("/movie/upcoming");
-    return response.data.results;
+    try {
+      const response = await tmdbClient.get("/movie/upcoming");
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error('Error fetching upcoming movies:', error);
+      throw error;
+    }
   },
 
   getMovieById: async (id: number): Promise<MovieDetails> => {
-    const response = await tmdbClient.get(`/movie/${id}`, {
-      params: {
-        append_to_response: "credits,recommendations,similar"
-      }
-    });
-    return response.data;
+    try {
+      const response = await tmdbClient.get(`/movie/${id}`, {
+        params: {
+          append_to_response: 'credits,recommendations,similar'
+        }
+      });
+      return {
+        ...cleanMovieData(response.data),
+        credits: cleanCreditsData(response.data.credits),
+        recommendations: response.data.recommendations || { results: [] },
+        similar: response.data.similar || { results: [] }
+      };
+    } catch (error) {
+      console.error(`Error fetching movie ${id}:`, error);
+      throw error;
+    }
   },
 
   getGenres: async (): Promise<Genre[]> => {
@@ -143,5 +260,35 @@ export const tmdbApi = {
       }
     });
     return response.data;
+  },
+
+  getMovieRecommendations: async (movieId: number): Promise<Movie[]> => {
+    try {
+      const response = await tmdbClient.get(`/movie/${movieId}/recommendations`);
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error(`Error fetching recommendations for movie ${movieId}:`, error);
+      throw error;
+    }
+  },
+
+  getSimilarMovies: async (movieId: number): Promise<Movie[]> => {
+    try {
+      const response = await tmdbClient.get(`/movie/${movieId}/similar`);
+      return (response.data.results || []).map(cleanMovieData);
+    } catch (error) {
+      console.error(`Error fetching similar movies for ${movieId}:`, error);
+      throw error;
+    }
+  },
+
+  getMovieKeywords: async (movieId: number): Promise<{ id: number; name: string; }[]> => {
+    try {
+      const response = await tmdbClient.get(`/movie/${movieId}/keywords`);
+      return response.data.keywords || [];
+    } catch (error) {
+      console.error(`Error fetching keywords for movie ${movieId}:`, error);
+      throw error;
+    }
   }
 };

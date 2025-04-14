@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { fetchMovieDetails, addReview, addToWatchlist, removeFromWatchlist } from "@/services/api";
+import { getImageUrl } from "@/services/tmdb";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import MobileNavigation from "@/components/layout/mobile-navigation";
@@ -237,6 +238,76 @@ export default function MoviePage() {
     );
   };
 
+  // Default reviews for specific movies
+  const defaultReviews: Record<number, any[]> = {
+    155: [ // The Dark Knight
+      {
+        id: 1,
+        userId: 1,
+        movieId: 155,
+        rating: 5,
+        content: "Christopher Nolan's masterpiece redefines the superhero genre. Heath Ledger's Joker is one of the greatest performances in cinema history. The film's exploration of chaos and morality is both thrilling and thought-provoking.",
+        authorName: "Alex Johnson",
+        createdAt: new Date("2024-02-15"),
+        user: { username: "Alex Johnson", avatar: null },
+        movie: { title: "The Dark Knight", poster_path: "/qJ2tW6WMUDux911r6mFAha3VXxN.jpg" }
+      },
+      {
+        id: 2,
+        userId: 2,
+        movieId: 155,
+        rating: 5,
+        content: "A perfect blend of action, drama, and psychological depth. The Dark Knight transcends the superhero genre to become a modern classic. Ledger's performance is hauntingly brilliant.",
+        authorName: "Sarah Williams",
+        createdAt: new Date("2024-02-10"),
+        user: { username: "Sarah Williams", avatar: null },
+        movie: { title: "The Dark Knight", poster_path: "/qJ2tW6WMUDux911r6mFAha3VXxN.jpg" }
+      }
+    ],
+    238: [ // The Godfather
+      {
+        id: 3,
+        userId: 3,
+        movieId: 238,
+        rating: 5,
+        content: "A timeless classic that set the standard for all crime dramas. Marlon Brando and Al Pacino deliver unforgettable performances. The film's exploration of power, family, and morality is masterfully executed.",
+        authorName: "Michael Chen",
+        createdAt: new Date("2024-02-05"),
+        user: { username: "Michael Chen", avatar: null },
+        movie: { title: "The Godfather", poster_path: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg" }
+      }
+    ],
+    550: [ // Fight Club
+      {
+        id: 4,
+        userId: 4,
+        movieId: 550,
+        rating: 4.5,
+        content: "David Fincher's dark and twisted masterpiece. The film's commentary on consumerism and masculinity is as relevant today as it was in 1999. Brad Pitt and Edward Norton deliver career-defining performances.",
+        authorName: "Emma Davis",
+        createdAt: new Date("2024-02-01"),
+        user: { username: "Emma Davis", avatar: null },
+        movie: { title: "Fight Club", poster_path: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg" }
+      }
+    ],
+    680: [ // Pulp Fiction
+      {
+        id: 5,
+        userId: 5,
+        movieId: 680,
+        rating: 5,
+        content: "Quentin Tarantino's non-linear storytelling masterpiece. The film's sharp dialogue, memorable characters, and unexpected twists make it one of the most influential films of the 90s.",
+        authorName: "James Wilson",
+        createdAt: new Date("2024-01-28"),
+        user: { username: "James Wilson", avatar: null },
+        movie: { title: "Pulp Fiction", poster_path: "/d5iIlFn5s0ImszYzBPb8JPJbDQI.jpg" }
+      }
+    ]
+  };
+
+  // Get reviews for the current movie
+  const currentMovieReviews = movieId ? defaultReviews[movieId] || [] : [];
+
   if (error) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -269,14 +340,19 @@ export default function MoviePage() {
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/50 z-10"></div>
             {isLoading ? (
               <Skeleton className="w-full h-full" />
+            ) : movie?.backdrop_path ? (
+              <img 
+                src={getImageUrl(movie.backdrop_path, "original") ?? "https://via.placeholder.com/1280x720?text=No+Backdrop"} 
+                alt={movie.title || "Movie backdrop"}
+                className="w-full h-full object-cover object-top"
+                onError={(e) => {
+                  e.currentTarget.src = "https://via.placeholder.com/1280x720?text=No+Backdrop";
+                }}
+              />
             ) : (
-              movie?.backdrop_path && (
-                <img 
-                  src={`https://image.tmdb.org/t/p/original${movie.backdrop_path}`} 
-                  alt={movie.title}
-                  className="w-full h-full object-cover object-top"
-                />
-              )
+              <div className="w-full h-full bg-muted flex items-center justify-center">
+                <span className="text-muted-foreground">No backdrop available</span>
+              </div>
             )}
           </div>
           
@@ -290,11 +366,14 @@ export default function MoviePage() {
                 ) : (
                   <img 
                     src={movie?.poster_path 
-                      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` 
+                      ? getImageUrl(movie.poster_path, "w500") ?? "https://via.placeholder.com/500x750?text=No+Poster"
                       : "https://via.placeholder.com/500x750?text=No+Poster"
                     } 
-                    alt={movie?.title}
+                    alt={movie?.title || "Movie poster"}
                     className="w-full rounded-md shadow-lg"
+                    onError={(e) => {
+                      e.currentTarget.src = "https://via.placeholder.com/500x750?text=No+Poster";
+                    }}
                   />
                 )}
               </div>
@@ -329,8 +408,8 @@ export default function MoviePage() {
                     
                     <div className="flex items-center space-x-4 mb-4 justify-center md:justify-start">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-muted/70 flex items-center justify-center text-green-500 font-bold">
-                          {Math.round(movie?.vote_average * 10)}
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-green-500 font-bold">
+                          {Math.round((movie?.vote_average ?? 0) * 10)}
                         </div>
                       </div>
                       
@@ -544,11 +623,14 @@ export default function MoviePage() {
                           <div className="w-full aspect-square rounded-full overflow-hidden mb-2 bg-muted">
                             <img
                               src={actor.profile_path
-                                ? `https://image.tmdb.org/t/p/w185${actor.profile_path}`
+                                ? getImageUrl(actor.profile_path, "w154") ?? "https://via.placeholder.com/185x185?text=No+Image"
                                 : "https://via.placeholder.com/185x185?text=No+Image"
                               }
                               alt={actor.name}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://via.placeholder.com/185x185?text=No+Image";
+                              }}
                             />
                           </div>
                           <h4 className="font-medium text-sm">{actor.name}</h4>
@@ -598,14 +680,36 @@ export default function MoviePage() {
                   Array.from({ length: 3 }).map((_, i) => (
                     <Skeleton key={i} className="h-40" />
                   ))
-                ) : movieReviews && movieReviews.length > 0 ? (
+                ) : (movieReviews && movieReviews.length > 0) || currentMovieReviews.length > 0 ? (
                   <div className="space-y-6">
-                    {movieReviews.map((review: any) => (
+                    {movieReviews?.map((review: any) => (
                       <div key={review.id} className="bg-muted/30 rounded-lg p-6">
                         <div className="flex justify-between mb-3">
                           <div className="flex items-center">
                             <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mr-3">
-                              {review.userId.toString()[0].toUpperCase()}
+                              {review.user?.username?.[0].toUpperCase() || "U"}
+                            </div>
+                            <div>
+                              <p className="font-medium">{review.user?.username || "User"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(review.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            <span className="text-lg font-bold text-green-500 mr-1">{review.rating}</span>
+                            <Star className="w-4 h-4 text-green-500 fill-current" />
+                          </div>
+                        </div>
+                        <p className="text-muted-foreground">{review.content || "No written review."}</p>
+                      </div>
+                    ))}
+                    {currentMovieReviews.map((review) => (
+                      <div key={review.id} className="bg-muted/30 rounded-lg p-6">
+                        <div className="flex justify-between mb-3">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mr-3">
+                              {review.user?.username?.[0].toUpperCase() || "U"}
                             </div>
                             <div>
                               <p className="font-medium">{review.user?.username || "User"}</p>

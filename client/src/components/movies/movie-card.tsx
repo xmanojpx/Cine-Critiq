@@ -18,16 +18,21 @@ export default function MovieCard({ id, title, posterPath, releaseDate, voteAver
   const { user } = useAuth();
   const { toast } = useToast();
   const [isHovered, setIsHovered] = useState(false);
+  const [imageError, setImageError] = useState(false);
   
-  const posterUrl = posterPath 
+  const posterUrl = !imageError && posterPath 
     ? `https://image.tmdb.org/t/p/w500${posterPath}` 
-    : 'https://via.placeholder.com/500x750?text=No+Poster';
+    : 'https://via.placeholder.com/500x750?text=' + encodeURIComponent(title || 'No Poster');
     
   const year = releaseDate ? new Date(releaseDate).getFullYear() : "N/A";
   const rating = Math.round(voteAverage * 10);
   
   const ratingColor = rating >= 70 ? "text-green-500" : rating >= 50 ? "text-yellow-500" : "text-red-500";
   
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   const addToWatchlistMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("You must be logged in to add to watchlist");
@@ -92,9 +97,10 @@ export default function MovieCard({ id, title, posterPath, releaseDate, voteAver
         <div className="relative overflow-hidden rounded-md aspect-[2/3] bg-muted">
           <img 
             src={posterUrl}
-            alt={title} 
+            alt={`${title} Poster`}
             className={`w-full h-full object-cover ${isHovered ? 'scale-105' : ''} transition-transform duration-300 ease-in-out`}
             loading="lazy"
+            onError={handleImageError}
           />
           
           {isHovered && (
@@ -128,8 +134,14 @@ export default function MovieCard({ id, title, posterPath, releaseDate, voteAver
         </div>
         
         <div className="mt-2">
-          <h3 className="font-medium truncate">{title}</h3>
-          <p className="text-muted-foreground text-sm">{year}</p>
+          <h3 className="text-sm font-medium line-clamp-2">{title}</h3>
+          <div className="flex items-center mt-1">
+            <span className="text-xs text-muted-foreground">{year}</span>
+            <div className={`ml-auto flex items-center ${ratingColor}`}>
+              <Star className="w-3 h-3 mr-1" />
+              <span className="text-xs">{rating}%</span>
+            </div>
+          </div>
         </div>
       </div>
     </Link>

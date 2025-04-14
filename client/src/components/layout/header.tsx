@@ -53,6 +53,9 @@ export default function Header() {
           <Link href="/" className="hidden md:block hover:text-primary text-sm font-medium">
             Discover
           </Link>
+          <Link href="/recommendations" className="hidden md:block hover:text-primary text-sm font-medium">
+            Recommendations
+          </Link>
           <Link href="/search?list=top_rated" className="hidden md:block hover:text-primary text-sm font-medium">
             Lists
           </Link>

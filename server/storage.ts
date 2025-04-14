@@ -78,6 +78,19 @@ export class MemStorage implements IStorage {
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000 // 24h in ms
     });
+
+    // Create default admin account
+    const adminUser: User = {
+      id: this.userIdCounter++,
+      username: "admin",
+      // This is the hash for password "admin2005" using scrypt with salt
+      password: "b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb980b1d7785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86.b5ea8090e12fc917e30d8b94f23e7388", // "admin2005" hashed
+      email: "admin@cinecritiq.com",
+      avatar: null,
+      bio: null,
+      createdAt: new Date()
+    };
+    this.users.set(adminUser.id, adminUser);
   }
 
   // User methods

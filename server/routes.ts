@@ -4,6 +4,25 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { tmdbApi } from "./tmdb";
 import { insertReviewSchema, insertWatchlistSchema, insertUserListSchema, insertListItemSchema } from "@shared/schema";
+import axios from "axios";
+import { combineRecommendations } from "./ml/recommendation";
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+// Helper function to retry failed requests
+async function retryRequest<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0 && axios.isAxiosError(error)) {
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return retryRequest(fn, retries - 1);
+    }
+    throw error;
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes
@@ -12,52 +31,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Movie routes
   app.get("/api/movies/trending", async (req, res) => {
     try {
-      const movies = await tmdbApi.getTrendingMovies();
+      const movies = await retryRequest(() => tmdbApi.getTrendingMovies());
       res.json(movies);
     } catch (error) {
       console.error("Error fetching trending movies:", error);
-      res.status(500).json({ message: "Failed to fetch trending movies" });
+      res.status(500).json({ 
+        message: "Failed to fetch trending movies",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
   app.get("/api/movies/popular", async (req, res) => {
     try {
-      const movies = await tmdbApi.getPopularMovies();
+      const movies = await retryRequest(() => tmdbApi.getPopularMovies());
       res.json(movies);
     } catch (error) {
       console.error("Error fetching popular movies:", error);
-      res.status(500).json({ message: "Failed to fetch popular movies" });
+      res.status(500).json({ 
+        message: "Failed to fetch popular movies",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
   app.get("/api/movies/top-rated", async (req, res) => {
     try {
-      const movies = await tmdbApi.getTopRatedMovies();
+      const movies = await retryRequest(() => tmdbApi.getTopRatedMovies());
       res.json(movies);
     } catch (error) {
       console.error("Error fetching top rated movies:", error);
-      res.status(500).json({ message: "Failed to fetch top rated movies" });
+      res.status(500).json({ 
+        message: "Failed to fetch top rated movies",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
   app.get("/api/movies/upcoming", async (req, res) => {
     try {
-      const movies = await tmdbApi.getUpcomingMovies();
+      const movies = await retryRequest(() => tmdbApi.getUpcomingMovies());
       res.json(movies);
     } catch (error) {
       console.error("Error fetching upcoming movies:", error);
-      res.status(500).json({ message: "Failed to fetch upcoming movies" });
+      res.status(500).json({ 
+        message: "Failed to fetch upcoming movies",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
   app.get("/api/movies/:id", async (req, res) => {
     try {
       const movieId = parseInt(req.params.id);
-      const movie = await tmdbApi.getMovieById(movieId);
+      if (isNaN(movieId)) {
+        return res.status(400).json({ message: "Invalid movie ID" });
+      }
+      const movie = await retryRequest(() => tmdbApi.getMovieById(movieId));
       res.json(movie);
     } catch (error) {
       console.error(`Error fetching movie ${req.params.id}:`, error);
-      res.status(500).json({ message: "Failed to fetch movie details" });
+      res.status(500).json({ 
+        message: "Failed to fetch movie details",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Recommendations routes
+  app.get("/api/movies/:id/recommendations", async (req, res) => {
+    try {
+      const movieId = parseInt(req.params.id);
+      if (isNaN(movieId)) {
+        return res.status(400).json({ message: "Invalid movie ID" });
+      }
+      const recommendations = await retryRequest(() => tmdbApi.getMovieRecommendations(movieId));
+      res.json(recommendations);
+    } catch (error) {
+      console.error(`Error fetching recommendations for movie ${req.params.id}:`, error);
+      res.status(500).json({ 
+        message: "Failed to fetch movie recommendations",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/movies/:id/similar", async (req, res) => {
+    try {
+      const movieId = parseInt(req.params.id);
+      if (isNaN(movieId)) {
+        return res.status(400).json({ message: "Invalid movie ID" });
+      }
+      const similarMovies = await retryRequest(() => tmdbApi.getSimilarMovies(movieId));
+      res.json(similarMovies);
+    } catch (error) {
+      console.error(`Error fetching similar movies for ${req.params.id}:`, error);
+      res.status(500).json({ 
+        message: "Failed to fetch similar movies",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/movies/:id/keywords", async (req, res) => {
+    try {
+      const movieId = parseInt(req.params.id);
+      if (isNaN(movieId)) {
+        return res.status(400).json({ message: "Invalid movie ID" });
+      }
+      const keywords = await retryRequest(() => tmdbApi.getMovieKeywords(movieId));
+      res.json(keywords);
+    } catch (error) {
+      console.error(`Error fetching keywords for movie ${req.params.id}:`, error);
+      res.status(500).json({ 
+        message: "Failed to fetch movie keywords",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ML-based recommendations endpoint
+  app.post("/api/recommendations/ml", async (req, res) => {
+    try {
+      const { movieIds } = req.body;
+      if (!Array.isArray(movieIds) || movieIds.length === 0) {
+        return res.status(400).json({ message: "Please provide at least one movie ID" });
+      }
+
+      // Validate movie IDs
+      if (!movieIds.every(id => typeof id === 'number' && !isNaN(id))) {
+        return res.status(400).json({ message: "Invalid movie IDs provided" });
+      }
+
+      // Fetch details for all input movies
+      const moviesDetails = await Promise.all(
+        movieIds.map(id => retryRequest(() => tmdbApi.getMovieById(id)))
+      );
+
+      // Convert MovieDetails to Movie type by picking only Movie properties
+      const movies = moviesDetails.map(details => ({
+        id: details.id,
+        title: details.title,
+        overview: details.overview,
+        poster_path: details.poster_path || undefined,
+        backdrop_path: details.backdrop_path || undefined,
+        release_date: details.release_date,
+        vote_average: details.vote_average,
+        vote_count: details.vote_count,
+        original_language: details.original_language,
+        genre_ids: details.genres?.map(g => g.id),
+        genres: details.genres
+      }));
+
+      // Get similar movies for each input movie
+      const similarMovies = await Promise.all(
+        movieIds.map(id => retryRequest(() => tmdbApi.getSimilarMovies(id)))
+      );
+
+      // Combine and process recommendations
+      const recommendations = await combineRecommendations(movies, similarMovies);
+      
+      if (!Array.isArray(recommendations)) {
+        throw new Error("Recommendations is not an array");
+      }
+      
+      // Transform recommendations to match client expectations
+      const transformedRecommendations = recommendations.map(rec => ({
+        movie: rec.movie,
+        explanation: rec.explanation
+      }));
+      
+      res.json(transformedRecommendations);
+    } catch (error) {
+      console.error("Error generating ML recommendations:", error);
+      res.status(500).json({ 
+        message: "Failed to generate recommendations",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 

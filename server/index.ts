@@ -1,10 +1,19 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Add CORS middleware
+if (process.env.NODE_ENV === "development") {
+  app.use(cors({
+    origin: true, // Allow all origins in development
+    credentials: true
+  }));
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -62,7 +71,7 @@ app.use((req, res, next) => {
   const port = 3000;
   server.listen({
     port,
-    host: "localhost"
+    host: "0.0.0.0"
   }, () => {
     log(`serving on port ${port}`);
   });
