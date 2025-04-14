@@ -103,7 +103,7 @@ export default function ProfilePage() {
     error: reviewsError,
   } = useQuery({
     queryKey: [`/api/users/${user?.id}/reviews`],
-    queryFn: () => fetch(`/api/movies/${user?.id}/reviews`).then(res => res.json()),
+    queryFn: () => fetch(`/api/users/${user?.id}/reviews`).then(res => res.json()),
     enabled: !!user && activeTab === "reviews",
   });
   
@@ -213,50 +213,35 @@ export default function ProfilePage() {
       
       <main className="flex-grow container mx-auto px-4 py-6">
         {/* Profile Header */}
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-10">
-          <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-muted">
-            {user.avatar ? (
-              <img src={user.avatar} alt={user.username} />
-            ) : (
-              <AvatarFallback className="text-3xl bg-primary/20">
-                {getInitials(user.username)}
-              </AvatarFallback>
-            )}
+        <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
+          <Avatar className="w-24 h-24">
+            <AvatarFallback>{getInitials(user?.username || '')}</AvatarFallback>
           </Avatar>
-          
           <div className="text-center md:text-left">
-            <h1 className="text-3xl font-bold mb-2">{user.username}</h1>
-            <p className="text-muted-foreground mb-4">
-              {user.bio || "No bio yet"}
-            </p>
-            <div className="flex flex-wrap justify-center md:justify-start gap-4">
-              <div className="flex items-center text-sm">
-                <CalendarDays className="w-4 h-4 mr-1" />
-                <span>Joined {formatDate(user.createdAt)}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <Film className="w-4 h-4 mr-1" />
-                <span>{watchlist?.length || 0} Movies in Watchlist</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <PenSquare className="w-4 h-4 mr-1" />
-                <span>{userReviews?.length || 0} Reviews</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <List className="w-4 h-4 mr-1" />
-                <span>{userLists?.length || 0} Lists</span>
-              </div>
-            </div>
+            <h1 className="text-2xl font-bold">{user?.username}</h1>
+            <p className="text-muted-foreground">{user?.bio || 'Movie enthusiast'}</p>
           </div>
         </div>
         
         {/* Profile Content Tabs */}
-        <Tabs defaultValue="watchlist" value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="w-full max-w-md mx-auto grid grid-cols-4 mb-8">
-            <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
-            <TabsTrigger value="lists">Lists</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="watchlist">
+              <Film className="w-4 h-4 mr-2" />
+              Watchlist
+            </TabsTrigger>
+            <TabsTrigger value="reviews">
+              <PenSquare className="w-4 h-4 mr-2" />
+              Reviews
+            </TabsTrigger>
+            <TabsTrigger value="lists">
+              <List className="w-4 h-4 mr-2" />
+              Lists
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <UserCircle className="w-4 h-4 mr-2" />
+              Settings
+            </TabsTrigger>
           </TabsList>
           
           {/* Watchlist Tab */}
@@ -321,99 +306,50 @@ export default function ProfilePage() {
           </TabsContent>
           
           {/* Reviews Tab */}
-          <TabsContent value="reviews">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold">Your Reviews</h2>
-            </div>
-            
+          <TabsContent value="reviews" className="mt-6">
             {isReviewsLoading ? (
-              <div className="space-y-6">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-40 w-full" />
-                ))}
-              </div>
-            ) : reviewsError ? (
-              <div className="text-center py-10">
-                <h3 className="text-lg font-medium mb-2">Error Loading Reviews</h3>
-                <p className="text-muted-foreground">Please try again later</p>
-              </div>
-            ) : userReviews && userReviews.length > 0 ? (
-              <div className="space-y-6">
-                {userReviews.map((review: Review) => (
-                  <div key={review.id} className="bg-muted/30 rounded-lg p-6">
-                    <div className="flex items-start gap-4">
-                      <Link href={`/movie/${review.movieId}`}>
-                        <div className="w-16 h-24 bg-muted rounded overflow-hidden flex-shrink-0">
-                          <img
-                            src={review.movie?.poster_path
-                              ? `https://image.tmdb.org/t/p/w154${review.movie.poster_path}`
-                              : "https://via.placeholder.com/154x231?text=No+Poster"
-                            }
-                            alt={review.movie?.title || "Movie poster"}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </Link>
-                      <div className="flex-grow">
-                        <div className="flex justify-between items-start mb-2">
-                          <Link href={`/movie/${review.movieId}`}>
-                            <h3 className="text-lg font-bold hover:text-primary">
-                              {review.movie?.title || "Unknown Movie"}
-                            </h3>
-                          </Link>
-                          <div className="flex items-center bg-muted px-2 py-1 rounded">
-                            <span className="text-green-500 font-bold mr-1">{review.rating}</span>
-                            <span className="text-green-500">★</span>
-                          </div>
-                        </div>
-                        <p className="text-muted-foreground mb-3">
-                          {review.content || "No written review."}
-                        </p>
-                        <div className="flex justify-between items-center text-xs text-muted-foreground">
-                          <span>Reviewed on {formatDate(review.createdAt.toString())}</span>
-                          <div className="flex gap-2">
-                            <Link href={`/movie/${review.movieId}?rate=true`}>
-                              <Button variant="ghost" size="sm">Edit</Button>
-                            </Link>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => {
-                                apiRequest("DELETE", `/api/reviews/${review.id}`).then(() => {
-                                  queryClient.invalidateQueries({ queryKey: [`/api/users/${user?.id}/reviews`] });
-                                  toast({
-                                    title: "Review deleted",
-                                    description: "Your review has been deleted",
-                                  });
-                                }).catch(error => {
-                                  toast({
-                                    title: "Error",
-                                    description: "Failed to delete review",
-                                    variant: "destructive",
-                                  });
-                                });
-                              }}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col space-y-2">
+                    <Skeleton className="aspect-[2/3] w-full rounded-md" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
                 ))}
               </div>
+            ) : reviewsError ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Error loading reviews</p>
+              </div>
+            ) : userReviews?.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No reviews yet</p>
+              </div>
             ) : (
-              <div className="text-center py-16 bg-muted/30 rounded-lg">
-                <PenSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-xl font-medium mb-2">No reviews yet</h3>
-                <p className="text-muted-foreground mb-6">
-                  Start rating and reviewing movies to share your thoughts
-                </p>
-                <Link href="/search">
-                  <Button>Discover Movies</Button>
-                </Link>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {userReviews?.map((review: any) => (
+                  <div key={review.id} className="bg-card rounded-lg p-4 shadow-sm">
+                    <div className="flex items-center gap-4 mb-4">
+                      <img
+                        src={`https://image.tmdb.org/t/p/w154${review.moviePosterPath}`}
+                        alt={review.movieTitle}
+                        className="w-16 h-24 object-cover rounded-md"
+                      />
+                      <div>
+                        <h3 className="font-semibold">{review.movieTitle}</h3>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>{review.rating}/5</span>
+                          <span>•</span>
+                          <span>{formatDate(review.createdAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-3">{review.content}</p>
+                    <Link href={`/movie/${review.movieId}`} className="text-primary text-sm font-medium mt-2 inline-block">
+                      Read full review
+                    </Link>
+                  </div>
+                ))}
               </div>
             )}
           </TabsContent>

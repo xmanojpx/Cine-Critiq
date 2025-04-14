@@ -8,6 +8,7 @@ import ReviewsSection from "@/components/movies/reviews-section";
 import GenresSection from "@/components/movies/genres-section";
 import { Film, Play } from "lucide-react";
 import { Link } from "wouter";
+import { Movie } from "@/types/movie";
 
 export default function HomePage() {
   // Fetch trending movies
@@ -31,14 +32,14 @@ export default function HomePage() {
         10751: "/3Rfvhy1Nl6sSGJwyjb0QiZzZYlB.jpg", // Family - E.T.
         14: "/5VTN0pR8gcqV3EPUHHfMGnJYN9L.jpg", // Fantasy - Lord of the Rings
         36: "/zb6fM1CX41D9rF9hdgclu0peUmy.jpg", // History - Gladiator
-        27: "/dVdO2DqnF7QkVJOPKaCxjC9Qsw8.jpg", // Horror - Halloween
+        27: "/bXXer71bjbBIAyYStUuO6QheiNv.jpg", // Horror - The Exorcist (updated)
         10402: "/7dzngS8pLkGJpyeskCFcjPO9qLF.jpg", // Music - Whiplash
-        9648: "/nMEKMNjm3HwJkwd3UuHnXxGxKz4.jpg", // Mystery - Se7en
+        9648: "/7PzJdsLGlR7oW4J0J5Xcd0pHGRg.jpg", // Mystery - Shutter Island (updated)
         10749: "/qom1SZSENdmHFNZBXbtJAU0WTlC.jpg", // Romance - The Notebook
         878: "/5bzPWQ2dFUl2aZKkp7ILJVVkRed.jpg", // Sci-Fi - Blade Runner 2049
         53: "/suaEOtk1N1sgg2MTM7oZd2cfVp3.jpg", // Thriller - Silence of the Lambs
         10752: "/bdD39MpSVhKjxarTxLSfX6baoMP.jpg", // War - Saving Private Ryan
-        37: "/wfgYk0G9YtIUXxRhZp3KwZr2LJP.jpg", // Western - Once Upon a Time in the West
+        37: "/uK15I3sGd8AudO9z6J6vi0HH1UU.jpg", // Western - Once Upon a Time in the West
       };
       
       return data.map((genre) => ({
@@ -58,7 +59,7 @@ export default function HomePage() {
       userId: 1,
       movieId: 155, // The Dark Knight
       movieTitle: "The Dark Knight",
-      moviePosterPath: "/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg", // Verified Dark Knight poster
+      moviePosterPath: "/1hRoyzDtpgMU7Dz4JF22RANzQO7.jpg", // Updated Dark Knight poster
       rating: 5,
       content: "Christopher Nolan's masterpiece redefines the superhero genre. Heath Ledger's Joker is one of the greatest performances in cinema history. The film's exploration of chaos and morality is both thrilling and thought-provoking.",
       authorName: "Alex Johnson",
@@ -80,7 +81,7 @@ export default function HomePage() {
       userId: 3,
       movieId: 550, // Fight Club
       movieTitle: "Fight Club",
-      moviePosterPath: "/nCRqRsOmxQV0RQqp65PprOnGQVG.jpg", // Verified Fight Club poster
+      moviePosterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", // Verified Fight Club poster
       rating: 4.5,
       content: "David Fincher's dark and twisted masterpiece. The film's commentary on consumerism and masculinity is as relevant today as it was in 1999. Brad Pitt and Edward Norton deliver career-defining performances.",
       authorName: "Michael Chen",

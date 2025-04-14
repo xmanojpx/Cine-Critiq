@@ -9,14 +9,17 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Film } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Film, Eye, EyeOff, Loader2 } from "lucide-react";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Login form schema
 const loginSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  rememberMe: z.boolean().default(false),
 });
 
 // Registration form schema
@@ -35,6 +38,8 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<string>("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { user, loginMutation, registerMutation } = useAuth();
   const [, navigate] = useLocation();
 
@@ -51,6 +56,7 @@ export default function AuthPage() {
     defaultValues: {
       username: "",
       password: "",
+      rememberMe: false,
     },
   });
 
@@ -108,6 +114,14 @@ export default function AuthPage() {
                     <CardContent>
                       <Form {...loginForm}>
                         <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-6">
+                          {loginMutation.error && (
+                            <Alert variant="destructive">
+                              <AlertDescription>
+                                {loginMutation.error.message || "Invalid username or password"}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          
                           <FormField
                             control={loginForm.control}
                             name="username"
@@ -115,12 +129,17 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Username</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter your username" {...field} />
+                                  <Input 
+                                    placeholder="Enter your username" 
+                                    {...field}
+                                    disabled={loginMutation.isPending}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
+                          
                           <FormField
                             control={loginForm.control}
                             name="password"
@@ -128,24 +147,103 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="Enter your password" {...field} />
+                                  <div className="relative">
+                                    <Input 
+                                      type={showPassword ? "text" : "password"}
+                                      placeholder="Enter your password" 
+                                      {...field}
+                                      disabled={loginMutation.isPending}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                      onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                      {showPassword ? (
+                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <Eye className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  </div>
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          <Button 
-                            type="submit" 
-                            className="w-full" 
-                            disabled={loginMutation.isPending}
-                          >
-                            {loginMutation.isPending ? "Signing in..." : "Sign In"}
-                          </Button>
+                          
+                          <FormField
+                            control={loginForm.control}
+                            name="rememberMe"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    disabled={loginMutation.isPending}
+                                  />
+                                </FormControl>
+                                <FormLabel className="text-sm font-normal">Remember me</FormLabel>
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <div className="space-y-4">
+                            <Button 
+                              type="submit" 
+                              className="w-full" 
+                              disabled={loginMutation.isPending}
+                            >
+                              {loginMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Signing in...
+                                </>
+                              ) : (
+                                "Sign In"
+                              )}
+                            </Button>
+                            
+                            <Button
+                              type="button"
+                              variant="link"
+                              className="w-full text-sm text-muted-foreground"
+                              onClick={() => {
+                                // TODO: Implement password reset
+                                alert("Password reset functionality coming soon!");
+                              }}
+                            >
+                              Forgot your password?
+                            </Button>
+                          </div>
                         </form>
                       </Form>
                     </CardContent>
-                    <CardFooter className="flex justify-center">
-                      <p className="text-sm text-muted-foreground">
+                    <CardFooter className="flex flex-col gap-4">
+                      <div className="relative w-full">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">
+                            Or continue with
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 w-full">
+                        <Button variant="outline" disabled>
+                          Google
+                        </Button>
+                        <Button variant="outline" disabled>
+                          GitHub
+                        </Button>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground text-center">
                         Don't have an account?{" "}
                         <Button variant="link" className="p-0" onClick={() => setActiveTab("register")}>
                           Register
@@ -165,6 +263,14 @@ export default function AuthPage() {
                     <CardContent>
                       <Form {...registerForm}>
                         <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-6">
+                          {registerMutation.error && (
+                            <Alert variant="destructive">
+                              <AlertDescription>
+                                {registerMutation.error.message || "Failed to create account"}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          
                           <FormField
                             control={registerForm.control}
                             name="username"
@@ -172,7 +278,11 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Username</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Choose a username" {...field} />
+                                  <Input 
+                                    placeholder="Choose a username" 
+                                    {...field}
+                                    disabled={registerMutation.isPending}
+                                  />
                                 </FormControl>
                                 <FormDescription>
                                   This will be displayed on your profile and reviews
@@ -181,6 +291,7 @@ export default function AuthPage() {
                               </FormItem>
                             )}
                           />
+                          
                           <FormField
                             control={registerForm.control}
                             name="email"
@@ -188,12 +299,18 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                  <Input type="email" placeholder="Enter your email" {...field} />
+                                  <Input 
+                                    type="email" 
+                                    placeholder="Enter your email" 
+                                    {...field}
+                                    disabled={registerMutation.isPending}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
+                          
                           <FormField
                             control={registerForm.control}
                             name="password"
@@ -201,12 +318,33 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="Create a password" {...field} />
+                                  <div className="relative">
+                                    <Input 
+                                      type={showPassword ? "text" : "password"}
+                                      placeholder="Create a password" 
+                                      {...field}
+                                      disabled={registerMutation.isPending}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                      onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                      {showPassword ? (
+                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <Eye className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  </div>
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
+                          
                           <FormField
                             control={registerForm.control}
                             name="confirmPassword"
@@ -214,24 +352,72 @@ export default function AuthPage() {
                               <FormItem>
                                 <FormLabel>Confirm Password</FormLabel>
                                 <FormControl>
-                                  <Input type="password" placeholder="Confirm your password" {...field} />
+                                  <div className="relative">
+                                    <Input 
+                                      type={showConfirmPassword ? "text" : "password"}
+                                      placeholder="Confirm your password" 
+                                      {...field}
+                                      disabled={registerMutation.isPending}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    >
+                                      {showConfirmPassword ? (
+                                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                      ) : (
+                                        <Eye className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </Button>
+                                  </div>
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
+                          
                           <Button 
                             type="submit" 
                             className="w-full" 
                             disabled={registerMutation.isPending}
                           >
-                            {registerMutation.isPending ? "Creating account..." : "Sign Up"}
+                            {registerMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Creating account...
+                              </>
+                            ) : (
+                              "Sign Up"
+                            )}
                           </Button>
                         </form>
                       </Form>
                     </CardContent>
-                    <CardFooter className="flex justify-center">
-                      <p className="text-sm text-muted-foreground">
+                    <CardFooter className="flex flex-col gap-4">
+                      <div className="relative w-full">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">
+                            Or continue with
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 w-full">
+                        <Button variant="outline" disabled>
+                          Google
+                        </Button>
+                        <Button variant="outline" disabled>
+                          GitHub
+                        </Button>
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground text-center">
                         Already have an account?{" "}
                         <Button variant="link" className="p-0" onClick={() => setActiveTab("login")}>
                           Log in

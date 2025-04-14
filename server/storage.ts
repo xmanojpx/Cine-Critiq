@@ -1,299 +1,396 @@
-import { users, type User, type InsertUser, 
-  reviews, type Review, type InsertReview,
-  watchlist, type WatchlistItem, type InsertWatchlistItem,
-  userLists, type UserList, type InsertUserList,
-  listItems, type ListItem, type InsertListItem  
-} from "@shared/schema";
-import session from "express-session";
-import createMemoryStore from "memorystore";
+import { User as SharedUser, Review as SharedReview } from '@shared/schema';
+import session from 'express-session';
+import createMemoryStore from 'memorystore';
+import bcrypt from 'bcrypt';
+import { tmdbApi } from './tmdb';
+import { initDB } from './db';
+import { Database } from 'sqlite3';
 
 const MemoryStore = createMemoryStore(session);
+
+export interface User extends SharedUser {
+  id: number;
+  createdAt: Date;
+}
+
+export interface Review extends SharedReview {
+  id: number;
+  createdAt: Date;
+  movieTitle?: string;
+  moviePosterPath?: string;
+}
 
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
+  updateUser(id: number, user: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<boolean>;
+  deleteUser(id: number): Promise<boolean>;
+  verifyPassword(user: User, password: string): Promise<boolean>;
   
   // Review operations
   getReviewById(id: number): Promise<Review | undefined>;
   getReviewsByMovieId(movieId: number): Promise<Review[]>;
-  getReviewsByUserId(userId: number): Promise<Review[]>;
+  getUserReviews(userId: number): Promise<Review[]>;
   getReviewByUserAndMovie(userId: number, movieId: number): Promise<Review | undefined>;
-  createReview(review: InsertReview): Promise<Review>;
-  updateReview(id: number, review: InsertReview): Promise<Review>;
-  deleteReview(id: number): Promise<void>;
-  
+  createReview(review: Omit<Review, 'id' | 'createdAt'>): Promise<Review>;
+  updateReview(id: number, review: Partial<Omit<Review, 'id' | 'createdAt'>>): Promise<boolean>;
+  deleteReview(id: number): Promise<boolean>;
+
   // Watchlist operations
-  getWatchlistByUserId(userId: number): Promise<WatchlistItem[]>;
-  getWatchlistItem(userId: number, movieId: number): Promise<WatchlistItem | undefined>;
-  addToWatchlist(item: InsertWatchlistItem): Promise<WatchlistItem>;
-  removeFromWatchlist(userId: number, movieId: number): Promise<void>;
-  
+  getWatchlistByUserId(userId: number): Promise<any[]>;
+  getWatchlistItem(userId: number, movieId: number): Promise<any>;
+  addToWatchlist(data: { userId: number; movieId: number }): Promise<any>;
+  removeFromWatchlist(userId: number, movieId: number): Promise<boolean>;
+
   // User Lists operations
-  getUserLists(userId: number): Promise<UserList[]>;
-  getUserListById(id: number): Promise<UserList | undefined>;
-  createUserList(list: InsertUserList): Promise<UserList>;
-  updateUserList(id: number, list: Partial<InsertUserList>): Promise<UserList>;
-  deleteUserList(id: number): Promise<void>;
-  
-  // List Items operations
-  getListItems(listId: number): Promise<ListItem[]>;
-  getListItem(id: number): Promise<ListItem | undefined>;
-  addMovieToList(item: InsertListItem): Promise<ListItem>;
-  updateListItem(id: number, item: Partial<InsertListItem>): Promise<ListItem>;
-  removeMovieFromList(id: number): Promise<void>;
-  
-  sessionStore: session.SessionStore;
+  getUserLists(userId: number): Promise<any[]>;
+  createUserList(data: { userId: number; name: string; description?: string; isPublic?: boolean }): Promise<any>;
+  getUserListById(id: number): Promise<any>;
+  getListItems(listId: number): Promise<any[]>;
+  addMovieToList(data: { listId: number; movieId: number; order: number; notes?: string }): Promise<any>;
+
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private reviews: Map<number, Review>;
-  private watchlistItems: Map<number, WatchlistItem>;
-  private userLists: Map<number, UserList>;
-  private listItems: Map<number, ListItem>;
-  
-  sessionStore: session.SessionStore;
-  
-  private userIdCounter: number;
-  private reviewIdCounter: number;
-  private watchlistIdCounter: number;
-  private userListIdCounter: number;
-  private listItemIdCounter: number;
+export class DBStorage implements IStorage {
+  sessionStore: session.Store;
+  private db: Awaited<ReturnType<typeof initDB>> | null = null;
 
   constructor() {
-    this.users = new Map();
-    this.reviews = new Map();
-    this.watchlistItems = new Map();
-    this.userLists = new Map();
-    this.listItems = new Map();
-    
-    this.userIdCounter = 1;
-    this.reviewIdCounter = 1;
-    this.watchlistIdCounter = 1;
-    this.userListIdCounter = 1;
-    this.listItemIdCounter = 1;
-    
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000 // 24h in ms
     });
+  }
 
-    // Create default admin account
-    const adminUser: User = {
-      id: this.userIdCounter++,
-      username: "admin",
-      // This is the hash for password "admin2005" using scrypt with salt
-      password: "b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb980b1d7785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86.b5ea8090e12fc917e30d8b94f23e7388", // "admin2005" hashed
-      email: "admin@cinecritiq.com",
-      avatar: null,
-      bio: null,
-      createdAt: new Date()
-    };
-    this.users.set(adminUser.id, adminUser);
+  private async getDB() {
+    if (!this.db) {
+      this.db = await initDB();
+    }
+    return this.db;
   }
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    return this.getUserById(id);
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const db = await this.getDB();
+    const user = await db.get('SELECT * FROM users WHERE id = ?', id);
+    return user ? { ...user, createdAt: new Date(user.createdAt) } : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+    const db = await this.getDB();
+    const user = await db.get('SELECT * FROM users WHERE username = ?', username);
+    return user ? { ...user, createdAt: new Date(user.createdAt) } : undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const db = await this.getDB();
+    const user = await db.get('SELECT * FROM users WHERE email = ?', email);
+    return user ? { ...user, createdAt: new Date(user.createdAt) } : undefined;
+  }
+
+  async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
+    const db = await this.getDB();
+    const result = await db.run(
+      'INSERT INTO users (username, email, password, avatar, bio) VALUES (?, ?, ?, ?, ?)',
+      user.username,
+      user.email,
+      user.password,
+      user.avatar,
+      user.bio
+    );
+    const created = await this.getUserById(result.lastID!);
+    if (!created) throw new Error('Failed to create user');
+    return created;
+  }
+
+  async updateUser(id: number, user: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<boolean> {
+    const db = await this.getDB();
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (user.username !== undefined) {
+      updates.push('username = ?');
+      values.push(user.username);
+    }
+    if (user.email !== undefined) {
+      updates.push('email = ?');
+      values.push(user.email);
+    }
+    if (user.password !== undefined) {
+      updates.push('password = ?');
+      values.push(user.password);
+    }
+    if (user.avatar !== undefined) {
+      updates.push('avatar = ?');
+      values.push(user.avatar);
+    }
+    if (user.bio !== undefined) {
+      updates.push('bio = ?');
+      values.push(user.bio);
+    }
+
+    if (updates.length === 0) return true;
+
+    values.push(id);
+    const result = await db.run(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      ...values
+    );
+    return result.changes! > 0;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    const db = await this.getDB();
+    const result = await db.run('DELETE FROM users WHERE id = ?', id);
+    return result.changes! > 0;
+  }
+
+  async verifyPassword(user: User, password: string): Promise<boolean> {
+    return bcrypt.compare(password, user.password);
+  }
+
+  // Review methods
+  async getReviewById(id: number): Promise<Review | undefined> {
+    const db = await this.getDB();
+    const review = await db.get(
+      `SELECT r.*, m.title as movieTitle, m.poster_path as moviePosterPath 
+       FROM reviews r 
+       LEFT JOIN movies m ON r.movieId = m.id 
+       WHERE r.id = ?`,
+      id
+    );
+    return review ? { ...review, createdAt: new Date(review.createdAt) } : undefined;
+  }
+
+  async getReviewsByMovieId(movieId: number): Promise<Review[]> {
+    const db = await this.getDB();
+    const reviews = await db.all(
+      `SELECT r.*, m.title as movieTitle, m.poster_path as moviePosterPath 
+       FROM reviews r 
+       LEFT JOIN movies m ON r.movieId = m.id 
+       WHERE r.movieId = ? 
+       ORDER BY r.createdAt DESC`,
+      movieId
+    );
+    return reviews.map(review => ({ ...review, createdAt: new Date(review.createdAt) }));
+  }
+
+  async getUserReviews(userId: number): Promise<Review[]> {
+    const db = await this.getDB();
+    try {
+      const reviews = await db.all<Review[]>(`
+        SELECT r.*, m.title as movieTitle, m.poster_path as moviePosterPath 
+        FROM reviews r
+        LEFT JOIN movies m ON r.movieId = m.id
+        WHERE r.userId = ?
+        ORDER BY r.createdAt DESC
+      `, userId);
+
+      // If movie data is not in the database, fetch it from TMDB
+      for (const review of reviews) {
+        if (!review.movieTitle || !review.moviePosterPath) {
+          try {
+            const movie = await tmdbApi.getMovieById(review.movieId);
+            if (movie) {
+              // Update the movie data in the database
+              await db.run(
+                `INSERT OR REPLACE INTO movies (id, title, poster_path, backdrop_path, overview, release_date, vote_average, vote_count)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                movie.id,
+                movie.title,
+                movie.poster_path || undefined,
+                movie.backdrop_path || undefined,
+                movie.overview,
+                movie.release_date,
+                movie.vote_average,
+                movie.vote_count
+              );
+              // Update the review with the movie data
+              review.movieTitle = movie.title;
+              review.moviePosterPath = movie.poster_path || undefined;
+            }
+          } catch (error) {
+            console.error(`Error fetching movie ${review.movieId}:`, error);
+          }
+        }
+      }
+
+      return reviews.map(review => ({ ...review, createdAt: new Date(review.createdAt) }));
+    } catch (error) {
+      console.error('Error fetching user reviews:', error);
+      throw new Error('Failed to fetch user reviews');
+    }
+  }
+
+  async getReviewByUserAndMovie(userId: number, movieId: number): Promise<Review | undefined> {
+    const db = await this.getDB();
+    const review = await db.get(
+      'SELECT * FROM reviews WHERE userId = ? AND movieId = ?',
+      userId,
+      movieId
+    );
+    return review ? { ...review, createdAt: new Date(review.createdAt) } : undefined;
+  }
+
+  async createReview(review: Omit<Review, 'id' | 'createdAt'>): Promise<Review> {
+    const db = await this.getDB();
+    const result = await db.run(
+      'INSERT INTO reviews (userId, movieId, rating, content) VALUES (?, ?, ?, ?)',
+      review.userId,
+      review.movieId,
+      review.rating,
+      review.content
+    );
+    const created = await this.getReviewById(result.lastID!);
+    if (!created) throw new Error('Failed to create review');
+    return created;
+  }
+
+  async updateReview(id: number, review: Partial<Omit<Review, 'id' | 'createdAt'>>): Promise<boolean> {
+    const db = await this.getDB();
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (review.rating !== undefined) {
+      updates.push('rating = ?');
+      values.push(review.rating);
+    }
+    if (review.content !== undefined) {
+      updates.push('content = ?');
+      values.push(review.content);
+    }
+
+    if (updates.length === 0) return true;
+
+    values.push(id);
+    const result = await db.run(
+      `UPDATE reviews SET ${updates.join(', ')} WHERE id = ?`,
+      ...values
+    );
+    return result.changes! > 0;
+  }
+
+  async deleteReview(id: number): Promise<boolean> {
+    const db = await this.getDB();
+    const result = await db.run('DELETE FROM reviews WHERE id = ?', id);
+    return result.changes! > 0;
+  }
+
+  // Watchlist methods
+  async getWatchlistByUserId(userId: number): Promise<any[]> {
+    const db = await this.getDB();
+    const items = await db.all(
+      `SELECT w.*, m.title, m.poster_path, m.release_date
+       FROM watchlist w
+       LEFT JOIN movies m ON w.movieId = m.id
+       WHERE w.userId = ?
+       ORDER BY w.createdAt DESC`,
+      userId
+    );
+    return items.map(item => ({ ...item, createdAt: new Date(item.createdAt) }));
+  }
+
+  async getWatchlistItem(userId: number, movieId: number): Promise<any> {
+    const db = await this.getDB();
+    return db.get(
+      'SELECT * FROM watchlist WHERE userId = ? AND movieId = ?',
+      userId,
+      movieId
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const now = new Date();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      avatar: null,
-      bio: null,
-      createdAt: now
-    };
-    this.users.set(id, user);
-    return user;
-  }
-  
-  // Review methods
-  async getReviewById(id: number): Promise<Review | undefined> {
-    return this.reviews.get(id);
-  }
-  
-  async getReviewsByMovieId(movieId: number): Promise<Review[]> {
-    return Array.from(this.reviews.values()).filter(
-      review => review.movieId === movieId
+  async addToWatchlist(data: { userId: number; movieId: number }): Promise<any> {
+    const db = await this.getDB();
+    const result = await db.run(
+      'INSERT INTO watchlist (userId, movieId) VALUES (?, ?)',
+      data.userId,
+      data.movieId
     );
+    return this.getWatchlistItem(data.userId, data.movieId);
   }
-  
-  async getReviewsByUserId(userId: number): Promise<Review[]> {
-    return Array.from(this.reviews.values()).filter(
-      review => review.userId === userId
+
+  async removeFromWatchlist(userId: number, movieId: number): Promise<boolean> {
+    const db = await this.getDB();
+    const result = await db.run(
+      'DELETE FROM watchlist WHERE userId = ? AND movieId = ?',
+      userId,
+      movieId
     );
+    return result.changes! > 0;
   }
-  
-  async getReviewByUserAndMovie(userId: number, movieId: number): Promise<Review | undefined> {
-    return Array.from(this.reviews.values()).find(
-      review => review.userId === userId && review.movieId === movieId
-    );
-  }
-  
-  async createReview(insertReview: InsertReview): Promise<Review> {
-    const id = this.reviewIdCounter++;
-    const now = new Date();
-    const review: Review = {
-      ...insertReview,
-      id,
-      createdAt: now
-    };
-    this.reviews.set(id, review);
-    return review;
-  }
-  
-  async updateReview(id: number, updateData: InsertReview): Promise<Review> {
-    const review = this.reviews.get(id);
-    if (!review) {
-      throw new Error(`Review with id ${id} not found`);
-    }
-    
-    const updatedReview: Review = {
-      ...review,
-      ...updateData
-    };
-    
-    this.reviews.set(id, updatedReview);
-    return updatedReview;
-  }
-  
-  async deleteReview(id: number): Promise<void> {
-    this.reviews.delete(id);
-  }
-  
-  // Watchlist methods
-  async getWatchlistByUserId(userId: number): Promise<WatchlistItem[]> {
-    return Array.from(this.watchlistItems.values()).filter(
-      item => item.userId === userId
-    );
-  }
-  
-  async getWatchlistItem(userId: number, movieId: number): Promise<WatchlistItem | undefined> {
-    return Array.from(this.watchlistItems.values()).find(
-      item => item.userId === userId && item.movieId === movieId
-    );
-  }
-  
-  async addToWatchlist(insertItem: InsertWatchlistItem): Promise<WatchlistItem> {
-    const id = this.watchlistIdCounter++;
-    const now = new Date();
-    const watchlistItem: WatchlistItem = {
-      ...insertItem,
-      id,
-      createdAt: now
-    };
-    this.watchlistItems.set(id, watchlistItem);
-    return watchlistItem;
-  }
-  
-  async removeFromWatchlist(userId: number, movieId: number): Promise<void> {
-    const item = await this.getWatchlistItem(userId, movieId);
-    if (item) {
-      this.watchlistItems.delete(item.id);
-    }
-  }
-  
+
   // User Lists methods
-  async getUserLists(userId: number): Promise<UserList[]> {
-    return Array.from(this.userLists.values()).filter(
-      list => list.userId === userId
+  async getUserLists(userId: number): Promise<any[]> {
+    const db = await this.getDB();
+    const lists = await db.all(
+      `SELECT l.*, COUNT(li.id) as itemCount
+       FROM user_lists l
+       LEFT JOIN list_items li ON l.id = li.listId
+       WHERE l.userId = ?
+       GROUP BY l.id
+       ORDER BY l.createdAt DESC`,
+      userId
     );
+    return lists.map(list => ({ ...list, createdAt: new Date(list.createdAt) }));
   }
-  
-  async getUserListById(id: number): Promise<UserList | undefined> {
-    return this.userLists.get(id);
+
+  async createUserList(data: { userId: number; name: string; description?: string; isPublic?: boolean }): Promise<any> {
+    const db = await this.getDB();
+    const result = await db.run(
+      'INSERT INTO user_lists (userId, name, description, isPublic) VALUES (?, ?, ?, ?)',
+      data.userId,
+      data.name,
+      data.description,
+      data.isPublic ?? false
+    );
+    return this.getUserListById(result.lastID!);
   }
-  
-  async createUserList(insertList: InsertUserList): Promise<UserList> {
-    const id = this.userListIdCounter++;
-    const now = new Date();
-    const list: UserList = {
-      ...insertList,
-      id,
-      createdAt: now
-    };
-    this.userLists.set(id, list);
-    return list;
+
+  async getUserListById(id: number): Promise<any> {
+    const db = await this.getDB();
+    const list = await db.get(
+      `SELECT l.*, COUNT(li.id) as itemCount
+       FROM user_lists l
+       LEFT JOIN list_items li ON l.id = li.listId
+       WHERE l.id = ?
+       GROUP BY l.id`,
+      id
+    );
+    return list ? { ...list, createdAt: new Date(list.createdAt) } : undefined;
   }
-  
-  async updateUserList(id: number, updateData: Partial<InsertUserList>): Promise<UserList> {
-    const list = this.userLists.get(id);
-    if (!list) {
-      throw new Error(`List with id ${id} not found`);
-    }
-    
-    const updatedList: UserList = {
-      ...list,
-      ...updateData
-    };
-    
-    this.userLists.set(id, updatedList);
-    return updatedList;
+
+  async getListItems(listId: number): Promise<any[]> {
+    const db = await this.getDB();
+    const items = await db.all(
+      `SELECT li.*, m.title, m.poster_path, m.release_date
+       FROM list_items li
+       LEFT JOIN movies m ON li.movieId = m.id
+       WHERE li.listId = ?
+       ORDER BY li.item_order ASC`,
+      listId
+    );
+    return items.map(item => ({ ...item, createdAt: new Date(item.createdAt) }));
   }
-  
-  async deleteUserList(id: number): Promise<void> {
-    this.userLists.delete(id);
-    
-    // Delete all associated list items
-    for (const [itemId, item] of this.listItems.entries()) {
-      if (item.listId === id) {
-        this.listItems.delete(itemId);
-      }
-    }
-  }
-  
-  // List Items methods
-  async getListItems(listId: number): Promise<ListItem[]> {
-    return Array.from(this.listItems.values())
-      .filter(item => item.listId === listId)
-      .sort((a, b) => a.order - b.order);
-  }
-  
-  async getListItem(id: number): Promise<ListItem | undefined> {
-    return this.listItems.get(id);
-  }
-  
-  async addMovieToList(insertItem: InsertListItem): Promise<ListItem> {
-    const id = this.listItemIdCounter++;
-    const now = new Date();
-    const listItem: ListItem = {
-      ...insertItem,
-      id,
-      createdAt: now
-    };
-    this.listItems.set(id, listItem);
-    return listItem;
-  }
-  
-  async updateListItem(id: number, updateData: Partial<InsertListItem>): Promise<ListItem> {
-    const item = this.listItems.get(id);
-    if (!item) {
-      throw new Error(`List item with id ${id} not found`);
-    }
-    
-    const updatedItem: ListItem = {
-      ...item,
-      ...updateData
-    };
-    
-    this.listItems.set(id, updatedItem);
-    return updatedItem;
-  }
-  
-  async removeMovieFromList(id: number): Promise<void> {
-    this.listItems.delete(id);
+
+  async addMovieToList(data: { listId: number; movieId: number; order: number; notes?: string }): Promise<any> {
+    const db = await this.getDB();
+    await db.run(
+      'INSERT INTO list_items (listId, movieId, item_order, notes) VALUES (?, ?, ?, ?)',
+      data.listId,
+      data.movieId,
+      data.order,
+      data.notes
+    );
+    return this.getListItems(data.listId);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DBStorage();

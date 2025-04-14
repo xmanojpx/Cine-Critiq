@@ -6,6 +6,7 @@ import { tmdbApi } from "./tmdb";
 import { insertReviewSchema, insertWatchlistSchema, insertUserListSchema, insertListItemSchema } from "@shared/schema";
 import axios from "axios";
 import { combineRecommendations } from "./ml/recommendation";
+import { Request, Response, NextFunction } from "express";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
@@ -16,6 +17,11 @@ async function retryRequest<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Pro
     return await fn();
   } catch (error) {
     if (retries > 0 && axios.isAxiosError(error)) {
+      console.error(`Request failed, retrying (${retries} attempts remaining):`, {
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.message
+      });
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
       return retryRequest(fn, retries - 1);
@@ -24,17 +30,58 @@ async function retryRequest<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Pro
   }
 }
 
+// Authentication middleware
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  // Public routes that don't require authentication
+  const publicPaths = [
+    '/',              // Root path
+    '/index.html',    // Main HTML file
+    '/static',        // Static files
+    '/assets',        // Assets
+    '/api/movies',    // Movie endpoints
+    '/api/genres',    // Genre endpoints
+    '/api/search',    // Search endpoint
+    '/api/login',     // Login
+    '/api/register'   // Registration
+  ];
+
+  // Check if the request path starts with any of the public paths
+  if (publicPaths.some(path => req.path === path || req.path.startsWith(path))) {
+    return next();
+  }
+
+  // For protected routes, check authentication
+  if (req.isAuthenticated()) {
+    return next();
+  }
+
+  res.sendStatus(401);
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes
   setupAuth(app);
 
+  // Apply authentication middleware to all routes
+  app.use(requireAuth);
+
   // Movie routes
   app.get("/api/movies/trending", async (req, res) => {
     try {
+      console.log("Fetching trending movies...");
       const movies = await retryRequest(() => tmdbApi.getTrendingMovies());
+      console.log(`Successfully fetched ${movies.length} trending movies`);
       res.json(movies);
     } catch (error) {
       console.error("Error fetching trending movies:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       res.status(500).json({ 
         message: "Failed to fetch trending movies",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -44,10 +91,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movies/popular", async (req, res) => {
     try {
+      console.log("Fetching popular movies...");
       const movies = await retryRequest(() => tmdbApi.getPopularMovies());
+      console.log(`Successfully fetched ${movies.length} popular movies`);
       res.json(movies);
     } catch (error) {
       console.error("Error fetching popular movies:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       res.status(500).json({ 
         message: "Failed to fetch popular movies",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -57,10 +114,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movies/top-rated", async (req, res) => {
     try {
+      console.log("Fetching top rated movies...");
       const movies = await retryRequest(() => tmdbApi.getTopRatedMovies());
+      console.log(`Successfully fetched ${movies.length} top rated movies`);
       res.json(movies);
     } catch (error) {
       console.error("Error fetching top rated movies:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       res.status(500).json({ 
         message: "Failed to fetch top rated movies",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -70,10 +137,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/movies/upcoming", async (req, res) => {
     try {
+      console.log("Fetching upcoming movies...");
       const movies = await retryRequest(() => tmdbApi.getUpcomingMovies());
+      console.log(`Successfully fetched ${movies.length} upcoming movies`);
       res.json(movies);
     } catch (error) {
       console.error("Error fetching upcoming movies:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       res.status(500).json({ 
         message: "Failed to fetch upcoming movies",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -87,10 +164,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(movieId)) {
         return res.status(400).json({ message: "Invalid movie ID" });
       }
+      console.log(`Fetching movie details for ID: ${movieId}`);
       const movie = await retryRequest(() => tmdbApi.getMovieById(movieId));
+      console.log(`Successfully fetched movie: ${movie.title}`);
       res.json(movie);
     } catch (error) {
       console.error(`Error fetching movie ${req.params.id}:`, error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+      }
       res.status(500).json({ 
         message: "Failed to fetch movie details",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -435,6 +522,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error adding movie to list:", error);
       res.status(500).json({ message: "Failed to add movie to list" });
+    }
+  });
+
+  app.get("/api/users/:id/reviews", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const reviews = await storage.getUserReviews(userId);
+      
+      // Fetch movie details for each review
+      const reviewsWithMovies = await Promise.all(
+        reviews.map(async (review) => {
+          const movie = await tmdbApi.getMovieById(review.movieId);
+          return {
+            ...review,
+            movie: {
+              id: movie.id,
+              title: movie.title,
+              posterPath: movie.poster_path,
+              releaseDate: movie.release_date
+            }
+          };
+        })
+      );
+      
+      res.json(reviewsWithMovies);
+    } catch (error) {
+      console.error("Error fetching user reviews:", error);
+      res.status(500).json({ message: "Failed to fetch user reviews" });
     }
   });
 

@@ -1,10 +1,11 @@
 import * as tf from '@tensorflow/tfjs';
-import { Movie, Genre } from '../types';
+import { Movie, MovieDetails } from '../types';
 import { extractContentFeatures, calculateContentSimilarity, ContentFeatures } from './content-analysis';
 
-interface MovieFeatures extends ContentFeatures {
-  language: string;
+interface MovieFeatures {
+  keywords: string[];
   genres: number[];
+  directors: string[];  // Changed to array to support multiple directors
 }
 
 interface Recommendation {
@@ -13,41 +14,96 @@ interface Recommendation {
   explanation: string;
 }
 
+// Get directors from movie credits
+function getDirectors(movie: MovieDetails): string[] {
+  return movie.credits?.crew
+    .filter(member => member.job.toLowerCase() === 'director')
+    .map(director => director.name) || [];
+}
+
+// Extract keywords from movie overview
+function extractKeywords(overview: string): string[] {
+  if (!overview) return [];
+  
+  // Convert to lowercase and remove punctuation
+  const text = overview.toLowerCase().replace(/[^\w\s]/g, '');
+  
+  // Split into words
+  const words = text.split(/\s+/);
+  
+  // Remove stopwords and short words
+  const stopwords = new Set([
+    'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
+    'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at',
+    'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her',
+    'she', 'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there',
+    'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get',
+    'which', 'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no',
+    'just', 'him', 'know', 'take', 'people', 'into', 'year', 'your',
+    'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then',
+    'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also',
+    'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first',
+    'well', 'way', 'even', 'new', 'want', 'because', 'any', 'these',
+    'give', 'day', 'most', 'us'
+  ]);
+  
+  return words.filter(word => 
+    word.length > 2 && !stopwords.has(word)
+  );
+}
+
 // Extract features from movie data
-function extractFeatures(movie: Movie, contentFeatures: ContentFeatures): MovieFeatures {
+function extractFeatures(movie: MovieDetails): MovieFeatures {
   return {
-    ...contentFeatures,
-    language: movie.original_language || 'en',
-    genres: movie.genre_ids || []
+    keywords: extractKeywords(movie.overview || ''),
+    genres: movie.genre_ids || [],
+    directors: getDirectors(movie)
   };
 }
 
+// Calculate keyword similarity using Jaccard similarity
+function calculateKeywordSimilarity(keywords1: string[], keywords2: string[]): number {
+  if (keywords1.length === 0 || keywords2.length === 0) return 0;
+  
+  const set1 = new Set(keywords1);
+  const set2 = new Set(keywords2);
+  
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  
+  return intersection.size / union.size;
+}
+
+// Calculate director similarity using Jaccard similarity
+function calculateDirectorSimilarity(directors1: string[], directors2: string[]): number {
+  if (directors1.length === 0 || directors2.length === 0) return 0;
+  
+  const intersection = directors1.filter(d => directors2.includes(d)).length;
+  const union = new Set([...directors1, ...directors2]).size;
+  
+  return intersection / union;
+}
+
 // Calculate similarity between two movies
-function calculateSimilarity(
-  a: MovieFeatures, 
-  b: MovieFeatures, 
-  inputLanguage: string
-): number {
-  // Content similarity (summary, theme, tone)
-  const contentSimilarity = calculateContentSimilarity(a, b);
+function calculateSimilarity(a: MovieFeatures, b: MovieFeatures): number {
+  // Content similarity based on keywords
+  const keywordSimilarity = calculateKeywordSimilarity(a.keywords, b.keywords);
   
   // Genre similarity
   const genreSimilarity = calculateGenreSimilarity(a.genres, b.genres);
   
-  // Language similarity (boost for same language)
-  const languageSimilarity = a.language === b.language ? 1 : 0;
+  // Director similarity using Jaccard similarity
+  const directorSimilarity = calculateDirectorSimilarity(a.directors, b.directors);
   
   // Weighted combination of similarities
-  // Higher weight for content and language if input is non-English
-  const isNonEnglish = inputLanguage !== 'en';
-  const contentWeight = isNonEnglish ? 0.5 : 0.6;
-  const genreWeight = 0.3;
-  const languageWeight = isNonEnglish ? 0.2 : 0.1;
+  const keywordWeight = 0.4;  // 40% weight for content
+  const genreWeight = 0.2;    // 20% weight for genre
+  const directorWeight = 0.4; // 40% weight for director - increased importance
 
   return (
-    contentWeight * contentSimilarity +
+    keywordWeight * keywordSimilarity +
     genreWeight * genreSimilarity +
-    languageWeight * languageSimilarity
+    directorWeight * directorSimilarity
   );
 }
 
@@ -62,54 +118,40 @@ function calculateGenreSimilarity(genres1: number[], genres2: number[]): number 
 }
 
 export async function combineRecommendations(
-  inputMovies: Movie[],
-  similarMovies: Movie[][]
+  inputMovies: MovieDetails[],
+  similarMovies: MovieDetails[][]
 ): Promise<Recommendation[]> {
-  // Initialize TensorFlow.js
-  tf.setBackend('cpu');
-
-  // Extract content features for input movies
-  const inputFeatures = await Promise.all(
-    inputMovies.map(async movie => {
-      const contentFeatures = await extractContentFeatures(movie);
-      return extractFeatures(movie, contentFeatures);
-    })
-  );
-
-  // Get the primary language from input movies
-  const inputLanguage = inputMovies[0]?.original_language || 'en';
-
   // Process all similar movies
   const allSimilarMovies = similarMovies.flat();
   
+  // Extract features for input movies
+  const inputFeatures = inputMovies.map(movie => extractFeatures(movie));
+
   // Calculate similarity scores for each recommendation
-  const movieScores = await Promise.all(
-    allSimilarMovies.map(async movie => {
-      const contentFeatures = await extractContentFeatures(movie);
-      const movieFeatures = extractFeatures(movie, contentFeatures);
+  const movieScores = allSimilarMovies.map(movie => {
+    const movieFeatures = extractFeatures(movie);
 
-      // Calculate similarity with each input movie
-      const similarities = inputFeatures.map(features => 
-        calculateSimilarity(features, movieFeatures, inputLanguage)
-      );
+    // Calculate similarity with each input movie
+    const similarities = inputFeatures.map(features => 
+      calculateSimilarity(features, movieFeatures)
+    );
 
-      // Calculate average similarity
-      const avgSimilarity = similarities.reduce((sum, score) => sum + score, 0) / similarities.length;
+    // Calculate average similarity
+    const avgSimilarity = similarities.reduce((sum, score) => sum + score, 0) / similarities.length;
 
-      // Find the most similar input movie
-      const maxSimilarityIndex = similarities.indexOf(Math.max(...similarities));
-      const mostSimilarMovie = inputMovies[maxSimilarityIndex];
+    // Find the most similar input movie
+    const maxSimilarityIndex = similarities.indexOf(Math.max(...similarities));
+    const mostSimilarMovie = inputMovies[maxSimilarityIndex];
 
-      // Generate explanation
-      const explanation = generateExplanation(movie, mostSimilarMovie, avgSimilarity);
+    // Generate explanation
+    const explanation = generateExplanation(movie, mostSimilarMovie, movieFeatures, inputFeatures[maxSimilarityIndex]);
 
-      return {
-        movie,
-        score: avgSimilarity,
-        explanation
-      };
-    })
-  );
+    return {
+      movie,
+      score: avgSimilarity,
+      explanation
+    };
+  });
 
   // Sort by similarity score and remove duplicates
   const uniqueMovies = new Map<number, Recommendation>();
@@ -125,19 +167,45 @@ export async function combineRecommendations(
   return Array.from(uniqueMovies.values()).slice(0, 5);
 }
 
-function generateExplanation(recommendedMovie: Movie, similarMovie: Movie, similarity: number): string {
+function generateExplanation(
+  recommendedMovie: MovieDetails, 
+  similarMovie: MovieDetails,
+  recommendedFeatures: MovieFeatures,
+  similarFeatures: MovieFeatures
+): string {
+  const explanations = [];
+  
+  // Check for shared directors
+  const sharedDirectors = recommendedFeatures.directors.filter(d => 
+    similarFeatures.directors.includes(d)
+  );
+  
+  if (sharedDirectors.length > 0) {
+    if (sharedDirectors.length === 1) {
+      explanations.push(`Directed by ${sharedDirectors[0]}, who also directed "${similarMovie.title}"`);
+    } else {
+      const directorList = sharedDirectors.join(' and ');
+      explanations.push(`Shares directors (${directorList}) with "${similarMovie.title}"`);
+    }
+  }
+
+  // Check for shared genres
   const sharedGenres = recommendedMovie.genre_ids?.filter(id => 
     similarMovie.genre_ids?.includes(id)
   ) || [];
-
-  const explanations = [];
   
   if (sharedGenres.length > 0) {
     explanations.push(`Shares ${sharedGenres.length} genre${sharedGenres.length > 1 ? 's' : ''} with "${similarMovie.title}"`);
   }
+
+  // Check for shared keywords
+  const recommendedKeywords = new Set(recommendedFeatures.keywords);
+  const similarKeywords = new Set(similarFeatures.keywords);
+  const sharedKeywords = Array.from(recommendedKeywords).filter(keyword => similarKeywords.has(keyword));
   
-  if (recommendedMovie.original_language === similarMovie.original_language) {
-    explanations.push(`Same language as "${similarMovie.title}"`);
+  if (sharedKeywords.length > 0) {
+    const keywordSample = sharedKeywords.slice(0, 3).join(', ');
+    explanations.push(`Similar themes: ${keywordSample}`);
   }
   
   if (recommendedMovie.vote_average && recommendedMovie.vote_average >= 7.5) {

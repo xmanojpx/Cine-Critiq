@@ -13,7 +13,7 @@ type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginUser>;
+  loginMutation: UseMutationResult<SelectUser, Error, LoginUser & { rememberMe: boolean }>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, z.infer<typeof registerSchema>>;
 };
@@ -63,8 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginUser) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
+    mutationFn: async (credentials: LoginUser & { rememberMe: boolean }) => {
+      const { rememberMe, ...loginData } = credentials;
+      const res = await apiRequest("POST", "/api/login", { ...loginData, rememberMe });
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {

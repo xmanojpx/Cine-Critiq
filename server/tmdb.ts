@@ -109,6 +109,15 @@ export interface MovieDetails extends Movie {
   similar: {
     results: Movie[];
   };
+  videos?: {
+    results: {
+      id: string;
+      key: string;
+      site: string;
+      type: string;
+      name: string;
+    }[];
+  };
 }
 
 export interface Genre {
@@ -222,14 +231,15 @@ export const tmdbApi = {
     try {
       const response = await tmdbClient.get(`/movie/${id}`, {
         params: {
-          append_to_response: 'credits,recommendations,similar'
+          append_to_response: 'credits,recommendations,similar,videos'
         }
       });
       return {
         ...cleanMovieData(response.data),
         credits: cleanCreditsData(response.data.credits),
         recommendations: response.data.recommendations || { results: [] },
-        similar: response.data.similar || { results: [] }
+        similar: response.data.similar || { results: [] },
+        videos: response.data.videos || { results: [] }
       };
     } catch (error) {
       console.error(`Error fetching movie ${id}:`, error);
@@ -288,6 +298,16 @@ export const tmdbApi = {
       return response.data.keywords || [];
     } catch (error) {
       console.error(`Error fetching keywords for movie ${movieId}:`, error);
+      throw error;
+    }
+  },
+
+  getMovieVideos: async (movieId: number) => {
+    try {
+      const response = await tmdbClient.get(`/movie/${movieId}/videos`);
+      return response.data.results || [];
+    } catch (error) {
+      console.error(`Error fetching videos for movie ${movieId}:`, error);
       throw error;
     }
   }
