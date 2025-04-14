@@ -1,32 +1,60 @@
 # Cine Critiq 🎬
 
-A modern movie review and discovery platform built with React, TypeScript, and Express.
+A modern movie review and discovery platform built with React, TypeScript, and Express. Featuring an AI-powered recommendation system and comprehensive movie information.
 
 ## Features 🌟
 
 - **Movie Discovery**: Browse trending, popular, and top-rated movies
+- **Smart Recommendations**: AI-powered content-based recommendation system
 - **Search Functionality**: Search for movies by title, genre, or keywords
-- **Detailed Movie Information**: View comprehensive details about movies including cast, ratings, and reviews
+- **Detailed Movie Information**: View comprehensive details about movies including:
+  - Cast and crew information
+  - User reviews and ratings
+  - Similar movies
+  - Movie overview and details
+- **User Features**:
+  - Write and manage reviews
+  - Create custom movie lists
+  - Maintain a watchlist
+  - User authentication and profiles
 - **Genre Filtering**: Filter movies by specific genres
 - **Responsive Design**: Fully responsive UI that works on desktop and mobile devices
 - **Modern UI**: Built with Tailwind CSS and Shadcn UI components
 
 ## Screenshots 📸
 
-### Home Page
-![Home Page](screenshots/home.png)
+### Homepage with Trending Movies
+![Homepage](screenshots/homepage.png)
 
-### Movie Details
-![Movie Details](screenshots/movie-details.png)
+### Movie Overview with Details
+![Movie Overview](screenshots/movie_overview.png)
 
-### Search Results
-![Search Results](screenshots/search.png)
+### Cast and Crew Information
+![Cast and Crew](screenshots/movie_cast_crew.png)
+
+### User Reviews Section
+![Movie Reviews](screenshots/movie_reviews.png)
 
 ### Genre Selection
-![Genre Selection](screenshots/genres.png)
+![Genre Selection](screenshots/genre.png)
 
-### Mobile View
-![Mobile View](screenshots/mobile.png)
+### Smart Recommendations
+![Recommendations](screenshots/recommedation.png)
+
+### Authentication
+![Authentication](screenshots/auth.png)
+
+## Recent Updates 🆕
+
+- **AI-Powered Recommendations**: Implemented a content-based recommendation system that analyzes:
+  - Movie themes and tone through text analysis
+  - Genre similarities
+  - Language preferences
+- **Enhanced Error Handling**: Added robust error handling with retries for API requests
+- **Improved Movie Details**: Added comprehensive movie information including cast, crew, and similar movies
+- **User Experience**: Added loading states and error messages for better UX
+- **Performance Optimization**: Implemented caching and request retries
+- **Type Safety**: Enhanced TypeScript types and interfaces
 
 ## Tech Stack 💻
 
@@ -46,6 +74,10 @@ A modern movie review and discovery platform built with React, TypeScript, and E
 
 - **APIs**:
   - TMDB API for movie data
+
+- **ML/AI**:
+  - Custom content-based recommendation system
+  - Text vectorization for movie analysis
 
 ## Getting Started 🚀
 
@@ -91,7 +123,8 @@ The application will be available at `http://localhost:3000`
 │   │   └── services/  # API services
 ├── server/            # Backend Express application
 │   ├── routes/       # API routes
-│   └── services/     # Business logic
+│   ├── ml/          # Machine learning components
+│   └── services/    # Business logic
 └── shared/           # Shared types and utilities
 ```
 
